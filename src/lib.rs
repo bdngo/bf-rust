@@ -1,8 +1,21 @@
+use std::error::Error;
+use std::fmt;
+use std::io;
 use std::num::Wrapping;
-use std::io::{self, Error, ErrorKind};
 
 const MEM_SIZE: usize = 32_768;
 const NUM_ITERATIONS: u32 = 1_000;
+
+#[derive(Debug)]
+struct BFError(String);
+
+impl fmt::Display for BFError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Interpreter error: {}", self.0)
+    }
+}
+
+impl Error for BFError {}
 
 pub struct Program {
     program: String,
@@ -10,19 +23,20 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn new(program: String) -> Program {
+    pub fn new(argv: &[String]) -> Result<Program, Box<dyn Error>> {
+        if argv.len() != 2 {
+            return Err(Box::new(BFError(String::from("Incorrect number of arguments"))));
+        }
         let memory = [Wrapping(0u8); MEM_SIZE];
-        Program { program, memory }
+        let program = argv[1].clone();
+        Ok(Program { program, memory })
     }
 
-    pub fn run(&mut self) -> Result<String, io::Error> {
+    pub fn run(&mut self) -> Result<String, Box<dyn Error>> {
         let mut ptr = 0; 
         let mut pc = 0;
         let mut num_iters: u32 = 0;
         let mut output_vec: Vec<u8> = Vec::new();
-        if !self.is_matched() {
-            return Err(Error::new(ErrorKind::Other, "Unmatched brackets"));
-        }
 
         while pc < self.program.len() && num_iters <= NUM_ITERATIONS {
             let prog_chars: Vec<char> = self.program.chars().collect();
@@ -48,33 +62,41 @@ impl Program {
                 },
                 '[' => {
                     if self.memory[ptr].0 == 0 {
-                        while prog_chars[pc] != ']' {
-                            pc += 1;
+                        match self.jump_fwd(pc) {
+                            Ok(new_pc) => {
+                                pc = new_pc;
+                                num_iters += 1;
+                            },
+                            Err(e) => {
+                                return Err(e)
+                            },
                         }
-                        num_iters += 1;
-                        continue;
                     }
                 },
                 ']' => {
                     if self.memory[ptr].0 != 0 {
-                        while prog_chars[pc] != '[' {
-                            pc -= 1;
+                        match self.jump_bwd(pc) {
+                            Ok(new_pc) => {
+                                pc = new_pc;
+                                num_iters += 1;
+                            },
+                            Err(e) => {
+                                return Err(e)
+                            },
                         }
-                        num_iters += 1;
-                        continue;
                     }
                 }
-                _ => continue,
+                _ => {},
             }
             pc += 1;
         }
         match String::from_utf8(output_vec) {
             Ok(s) => Ok(s),
-            Err(e) => Err(Error::new(ErrorKind::Other, e)),
+            Err(_) => Err(Box::new(BFError(String::from("Bad UTF-8 encoding")))),
         }
     }
 
-    fn process_input(&self) -> Result<u8, io::Error> {
+    fn process_input(&self) -> Result<u8, Box<dyn Error>> {
         let mut buf = String::new();
         let out;
         loop {
@@ -92,24 +114,58 @@ impl Program {
                         }
                     }
                 },
-                Err(e) => {
-                    return Err(e)
+                Err(_) => {
+                    return Err(Box::new(BFError(String::from("Bad IO read"))))
                 },
             }
         }
         Ok(out)
     }
 
-    fn is_matched(&self) -> bool {
-        let mut stack = Vec::default();
-        for c in self.program.chars() {
-            if c == '[' {
-                stack.push(c);
-            } else if c == ']' {
+    fn jump_fwd(&self, pc: usize) -> Result<usize, Box<dyn Error>> {
+        let mut stack: Vec<char> = Vec::default();
+        let mut new_pc = pc;
+        let prog_chars: Vec<char> = self.program.chars().collect();
+        let mut curr_char = prog_chars[new_pc];
+        stack.push(curr_char);
+
+        while new_pc < self.program.len() && !stack.is_empty() {
+            new_pc += 1;
+            curr_char = prog_chars[new_pc];
+            if curr_char == '[' {
+                stack.push(curr_char);
+            } else if curr_char == ']' {
                 stack.pop();
             }
         }
-        stack.is_empty()
+        if stack.is_empty() {
+            Ok(new_pc)
+        } else {
+            Err(Box::new(BFError(String::from("Unbalanced program"))))
+        }
+    }
+
+    fn jump_bwd(&self, pc: usize) -> Result<usize, Box<dyn Error>> {
+        let mut stack: Vec<char> = Vec::default();
+        let mut new_pc = pc;
+        let prog_chars: Vec<char> = self.program.chars().collect();
+        let mut curr_char = prog_chars[new_pc];
+        stack.push(curr_char);
+
+        while new_pc < self.program.len() && !stack.is_empty() {
+            new_pc -= 1;
+            curr_char = prog_chars[new_pc];
+            if curr_char == ']' {
+                stack.push(curr_char);
+            } else if curr_char == '[' {
+                stack.pop();
+            }
+        }
+        if stack.is_empty() {
+            Ok(new_pc)
+        } else {
+            Err(Box::new(BFError(String::from("Unbalanced program"))))
+        }
     }
 }
 
@@ -119,15 +175,15 @@ mod tests {
 
     #[test]
     fn test_empty_program() {
-        let mut prog = Program::new(String::default());
-        let out = prog.run();
+        let prog = Program::new(&[String::from(""), String::from("")]);
+        let out = prog.unwrap().run();
         assert_eq!(String::default(), out.unwrap());
     }
 
     #[test]
     fn test_increment() {
-        let mut prog = Program::new(String::from("+."));
-        let out = prog.run();
+        let prog = Program::new(&[String::from(""), String::from("+.")]);
+        let out = prog.unwrap().run();
         let exp = &[0x01u8];
         assert_eq!(String::from_utf8_lossy(exp), out.unwrap());
     }
@@ -135,16 +191,16 @@ mod tests {
     #[test]
     #[ignore]
     fn test_decrement() {
-        let mut prog = Program::new(String::from("-."));
-        let out = prog.run();
+        let prog = Program::new(&[String::from(""), String::from("-.")]);
+        let out = prog.unwrap().run();
         let exp = &[255];
         assert_eq!(String::from_utf8_lossy(exp), out.unwrap());
     }
 
     #[test]
     fn test_infinite_loop() {
-        let mut prog = Program::new(String::from("[]"));
-        let out = prog.run();
+        let prog = Program::new(&[String::from(""), String::from("[]")]);
+        let out = prog.unwrap().run();
         assert_eq!(String::default(), out.unwrap());
     }
 }
