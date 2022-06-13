@@ -3,7 +3,7 @@ use std::fmt;
 use std::io;
 use std::num::Wrapping;
 
-const MEM_SIZE: usize = 32_768;
+const MEM_SIZE: usize = 2 << 16;
 const NUM_ITERATIONS: u32 = 1_000;
 
 #[derive(Debug)]
