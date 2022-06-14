@@ -1,8 +1,5 @@
-use std::error::Error;
-use std::fmt;
-use std::io;
-use std::num::Wrapping;
 use bitvec::prelude::{self as bv, Lsb0};
+use std::{error::Error, fmt, io, num::Wrapping};
 
 const MEM_SIZE: usize = 2 << 16;
 const NUM_ITERATIONS: u32 = 1_000;
@@ -27,16 +24,22 @@ pub struct Program {
 impl Program {
     pub fn new(argv: &[String]) -> Result<Program, Box<dyn Error>> {
         if argv.len() != 2 {
-            return Err(Box::new(BFError(String::from("Incorrect number of arguments"))));
+            return Err(Box::new(BFError(String::from(
+                "Incorrect number of arguments",
+            ))));
         }
         let memory = [Wrapping(0u8); MEM_SIZE];
         let program = argv[1].clone();
         let bitfield = bv::bitarr![0, MEM_SIZE];
-        Ok(Program { program, memory, bitfield })
+        Ok(Program {
+            program,
+            memory,
+            bitfield,
+        })
     }
 
     pub fn run(&mut self) -> Result<String, Box<dyn Error>> {
-        let mut ptr = 0; 
+        let mut ptr = 0;
         let mut pc = 0;
         let mut num_iters: u32 = 0;
         let mut output_vec: Vec<u8> = Vec::new();
@@ -47,59 +50,59 @@ impl Program {
             match c {
                 '>' => {
                     let new_ptr = ptr + 1;
-                    if !(0..MEM_SIZE).contains(&new_ptr) && self.bitfield.get(ptr).as_deref() == Some(&true) {
+                    if !(0..MEM_SIZE).contains(&new_ptr)
+                        && self.bitfield.get(ptr).as_deref() == Some(&true)
+                    {
                         return Err(Box::new(BFError(String::from("Wrapping memory access"))));
                     }
                     ptr = new_ptr % MEM_SIZE;
-                },
+                }
                 '<' => {
                     let new_ptr = ptr - 1;
-                    if !(0..MEM_SIZE).contains(&new_ptr) && self.bitfield.get(ptr).as_deref() == Some(&true) {
+                    if !(0..MEM_SIZE).contains(&new_ptr)
+                        && self.bitfield.get(ptr).as_deref() == Some(&true)
+                    {
                         return Err(Box::new(BFError(String::from("Wrapping memory access"))));
                     }
                     ptr = new_ptr % MEM_SIZE;
-                },
+                }
                 '+' => {
                     *&mut self.memory[ptr] += Wrapping(1u8);
                     self.bitfield.set(ptr, true);
-                },
+                }
                 '-' => {
                     *&mut self.memory[ptr] -= Wrapping(1u8);
                     self.bitfield.set(ptr, true);
-                },
+                }
                 '.' => {
                     output_vec.push(self.memory[ptr].0);
-                },
+                }
                 ',' => {
                     *&mut self.memory[ptr] = Wrapping(self.process_input().unwrap());
-                },
+                }
                 '[' => {
                     if self.memory[ptr].0 == 0 {
                         match self.jump_fwd(pc) {
                             Ok(new_pc) => {
                                 pc = new_pc;
                                 num_iters += 1;
-                            },
-                            Err(e) => {
-                                return Err(e)
-                            },
+                            }
+                            Err(e) => return Err(e),
                         }
                     }
-                },
+                }
                 ']' => {
                     if self.memory[ptr].0 != 0 {
                         match self.jump_bwd(pc) {
                             Ok(new_pc) => {
                                 pc = new_pc;
                                 num_iters += 1;
-                            },
-                            Err(e) => {
-                                return Err(e)
-                            },
+                            }
+                            Err(e) => return Err(e),
                         }
                     }
                 }
-                _ => {},
+                _ => {}
             }
             pc += 1;
         }
@@ -126,10 +129,8 @@ impl Program {
                             eprintln!("Bad byte read");
                         }
                     }
-                },
-                Err(_) => {
-                    return Err(Box::new(BFError(String::from("Bad IO read"))))
-                },
+                }
+                Err(_) => return Err(Box::new(BFError(String::from("Bad IO read")))),
             }
             buf.clear();
         }
