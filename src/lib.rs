@@ -2,6 +2,7 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 use std::num::Wrapping;
+use bitvec::prelude::{self as bv, Lsb0};
 
 const MEM_SIZE: usize = 2 << 16;
 const NUM_ITERATIONS: u32 = 1_000;
@@ -20,6 +21,7 @@ impl Error for BFError {}
 pub struct Program {
     program: String,
     memory: [Wrapping<u8>; MEM_SIZE],
+    bitfield: bv::BitArray,
 }
 
 impl Program {
@@ -29,7 +31,8 @@ impl Program {
         }
         let memory = [Wrapping(0u8); MEM_SIZE];
         let program = argv[1].clone();
-        Ok(Program { program, memory })
+        let bitfield = bv::bitarr![0, MEM_SIZE];
+        Ok(Program { program, memory, bitfield })
     }
 
     pub fn run(&mut self) -> Result<String, Box<dyn Error>> {
@@ -43,16 +46,26 @@ impl Program {
             let c = prog_chars[pc];
             match c {
                 '>' => {
-                    ptr += 1;
+                    let new_ptr = ptr + 1;
+                    if !(0..MEM_SIZE).contains(&new_ptr) && self.bitfield.get(ptr).as_deref() == Some(&true) {
+                        return Err(Box::new(BFError(String::from("Wrapping memory access"))));
+                    }
+                    ptr = new_ptr % MEM_SIZE;
                 },
                 '<' => {
-                    ptr -= 1;
+                    let new_ptr = ptr - 1;
+                    if !(0..MEM_SIZE).contains(&new_ptr) && self.bitfield.get(ptr).as_deref() == Some(&true) {
+                        return Err(Box::new(BFError(String::from("Wrapping memory access"))));
+                    }
+                    ptr = new_ptr % MEM_SIZE;
                 },
                 '+' => {
                     *&mut self.memory[ptr] += Wrapping(1u8);
+                    self.bitfield.set(ptr, true);
                 },
                 '-' => {
                     *&mut self.memory[ptr] -= Wrapping(1u8);
+                    self.bitfield.set(ptr, true);
                 },
                 '.' => {
                     output_vec.push(self.memory[ptr].0);
@@ -103,14 +116,14 @@ impl Program {
             println!("Input a character:");
             match io::stdin().read_line(&mut buf) {
                 Ok(_) => {
-                    if buf.len() != 1 {
-                        println!("Incorrect number of characters");
+                    if buf.len() != 2 {
+                        eprintln!("Incorrect number of characters");
                     } else {
                         if let Some(c) = buf.bytes().next() {
                             out = c;
                             break;
                         } else {
-                            println!("Bad byte read");
+                            eprintln!("Bad byte read");
                         }
                     }
                 },
@@ -118,6 +131,7 @@ impl Program {
                     return Err(Box::new(BFError(String::from("Bad IO read"))))
                 },
             }
+            buf.clear();
         }
         Ok(out)
     }
