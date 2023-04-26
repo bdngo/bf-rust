@@ -67,18 +67,18 @@ impl Program {
                     ptr = new_ptr % MEM_SIZE;
                 }
                 '+' => {
-                    *&mut self.memory[ptr] += Wrapping(1u8);
+                    self.memory[ptr] += Wrapping(1u8);
                     self.bitfield.set(ptr, true);
                 }
                 '-' => {
-                    *&mut self.memory[ptr] -= Wrapping(1u8);
+                    self.memory[ptr] -= Wrapping(1u8);
                     self.bitfield.set(ptr, true);
                 }
                 '.' => {
                     output_vec.push(self.memory[ptr].0);
                 }
                 ',' => {
-                    *&mut self.memory[ptr] = Wrapping(self.process_input().unwrap());
+                    self.memory[ptr] = Wrapping(self.process_input().unwrap());
                 }
                 '[' => {
                     if self.memory[ptr].0 == 0 {
@@ -121,13 +121,11 @@ impl Program {
                 Ok(_) => {
                     if buf.len() != 2 {
                         eprintln!("Incorrect number of characters");
+                    } else if let Some(c) = buf.bytes().next() {
+                        out = c;
+                        break;
                     } else {
-                        if let Some(c) = buf.bytes().next() {
-                            out = c;
-                            break;
-                        } else {
-                            eprintln!("Bad byte read");
-                        }
+                        eprintln!("Bad byte read");
                     }
                 }
                 Err(_) => return Err(Box::new(BFError(String::from("Bad IO read")))),
