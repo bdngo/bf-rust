@@ -22,21 +22,15 @@ pub struct Program<'a, 'b> {
 
 impl<'a, 'b> Program<'a, 'b> {
     pub fn new(
-        argv: &[String],
+        program: String,
         memory: &'a mut [Wrapping<u8>],
         bitfield: &'b mut bv::BitArray,
-    ) -> Result<Program<'a, 'b>, Box<dyn Error>> {
-        if argv.len() != 2 {
-            return Err(Box::new(BFError(String::from(
-                "Incorrect number of arguments",
-            ))));
-        }
-        let program = argv[1].clone();
-        Ok(Program {
+    ) -> Program<'a, 'b> {
+        Program {
             program,
             memory,
             bitfield,
-        })
+        }
     }
 
     pub fn run(&mut self) -> Result<String, Box<dyn Error>> {
@@ -195,12 +189,8 @@ mod tests {
     fn test_empty_program() {
         let mut memory = [Wrapping(0u8); TINY_MEM_SIZE];
         let mut bitfield = bv::bitarr![0, TINY_MEM_SIZE];
-        let prog = Program::new(
-            &[String::from(""), String::from("")],
-            &mut memory,
-            &mut bitfield,
-        );
-        let out = prog.unwrap().run();
+        let mut prog = Program::new(String::from(""), &mut memory, &mut bitfield);
+        let out = prog.run();
         assert_eq!(String::default(), out.unwrap());
     }
 
@@ -208,12 +198,8 @@ mod tests {
     fn test_increment() {
         let mut memory = [Wrapping(0u8); TINY_MEM_SIZE];
         let mut bitfield = bv::bitarr![0, TINY_MEM_SIZE];
-        let prog = Program::new(
-            &[String::from(""), String::from("+.")],
-            &mut memory,
-            &mut bitfield,
-        );
-        let out = prog.unwrap().run();
+        let mut prog = Program::new(String::from("+."), &mut memory, &mut bitfield);
+        let out = prog.run();
         let exp = &[0x01u8];
         assert_eq!(String::from_utf8_lossy(exp), out.unwrap());
     }
@@ -223,12 +209,8 @@ mod tests {
     fn test_decrement() {
         let mut memory = [Wrapping(0u8); TINY_MEM_SIZE];
         let mut bitfield = bv::bitarr![0, TINY_MEM_SIZE];
-        let prog = Program::new(
-            &[String::from(""), String::from("-.")],
-            &mut memory,
-            &mut bitfield,
-        );
-        let out = prog.unwrap().run();
+        let mut prog = Program::new(String::from("-."), &mut memory, &mut bitfield);
+        let out = prog.run();
         let exp = &[255];
         assert_eq!(String::from_utf8_lossy(exp), out.unwrap());
     }
@@ -237,12 +219,8 @@ mod tests {
     fn test_infinite_loop() {
         let mut memory = [Wrapping(0u8); TINY_MEM_SIZE];
         let mut bitfield = bv::bitarr![0, TINY_MEM_SIZE];
-        let prog = Program::new(
-            &[String::from(""), String::from("[]")],
-            &mut memory,
-            &mut bitfield,
-        );
-        let out = prog.unwrap().run();
+        let mut prog = Program::new(String::from("[]"), &mut memory, &mut bitfield);
+        let out = prog.run();
         assert_eq!(String::default(), out.unwrap());
     }
 }
